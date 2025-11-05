@@ -1,54 +1,46 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import Image from "next/image";
 
-export default function SupportCard() {
+interface AdoptionStatusProps {
+  monsterName: string;
+  adoptionData?: {
+    sponsorName: string;
+    sponsorUrl: string;
+  };
+}
+
+export default function AdoptionStatus({ monsterName, adoptionData }: AdoptionStatusProps) {
   const [showSupportModal, setShowSupportModal] = useState(false);
+
+  if (adoptionData) {
+    return (
+      <div className="text-center mb-4">
+        <p className="text-xs text-green-600" style={{ fontFamily: 'Minecraftia, monospace' }}>
+          ADOPTED BY{" "}
+          <a
+            href={adoptionData.sponsorUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-primary underline hover:no-underline"
+          >
+            {adoptionData.sponsorName}
+          </a>
+        </p>
+      </div>
+    );
+  }
 
   return (
     <>
-      <div className="mt-6 pt-6 border-t">
-        <div className="relative bg-gradient-to-r from-purple-500/20 to-blue-500/20 border border-purple-500/30 rounded-xl p-6 overflow-hidden">
-          {/* Left Monster - Infernus */}
-          <div className="absolute -left-6 top-1/2 transform -translate-y-1/2 w-26 h-26 z-10">
-            <Image
-              src="/monsters/monster-006-png.png"
-              alt="Infernus"
-              fill
-              className="object-contain"
-              sizes="64px"
-            />
-          </div>
-
-          {/* Right Monster - Fairy */}
-          <div className="absolute -right-6 top-1/2 transform -translate-y-1/2 w-26 h-26 z-10">
-            <Image
-              src="/monsters/monster-001-png.png"
-              alt="Fairy"
-              fill
-              className="object-contain"
-              sizes="104px"
-            />
-          </div>
-
-          {/* Card Content */}
-          <div className="relative z-20 text-center px-6">
-            <h4 className="font-semibold mb-3 text-sm">Support the project and own a GitMon and its IP</h4>
-            <div className="mb-4">
-              <p className="text-green-500 font-semibold text-sm">2/2 slots available</p>
-            </div>
-
-            <Button
-              size="sm"
-              className="w-full bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-700 hover:to-blue-700"
-              onClick={() => setShowSupportModal(true)}
-            >
-              Let&apos;s Go
-            </Button>
-          </div>
-        </div>
+      <div className="text-center mb-4">
+        <button
+          onClick={() => setShowSupportModal(true)}
+          className="text-xs text-muted-foreground hover:text-primary transition-colors underline hover:no-underline"
+          style={{ fontFamily: 'Minecraftia, monospace' }}
+        >
+          ADOPT {monsterName.toUpperCase()}
+        </button>
       </div>
 
       {/* Support Modal */}
@@ -96,19 +88,18 @@ export default function SupportCard() {
 
                 <div className="pt-4 border-t">
                   <div className="flex gap-3">
-                    <Button
+                    <button
                       onClick={() => setShowSupportModal(false)}
-                      variant="outline"
-                      className="flex-1"
+                      className="flex-1 px-4 py-2 border border-muted rounded-lg hover:bg-muted/50 transition-colors"
                     >
                       Close
-                    </Button>
-                    <Button
+                    </button>
+                    <button
                       onClick={() => window.open('https://x.com/isahermanx', '_blank')}
-                      className="flex-1 bg-blue-500 hover:bg-green-500"
+                      className="flex-1 px-4 py-2 bg-blue-500 hover:bg-green-500 text-white rounded-lg transition-colors"
                     >
                       SUPPORT OPEN SOURCE
-                    </Button>
+                    </button>
                   </div>
                 </div>
               </div>
