@@ -3,23 +3,13 @@
 import { Button } from "@/components/ui/button";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import Image from "next/image";
-import ContributionGraph from "@/components/ContributionGraph";
 import SupportCard from "@/components/SupportCard";
 import SponsorBar from "@/components/SponsorBar";
+import EventPopup from "@/components/EventPopup";
 
-const monsters = [
-  { id: 0, src: "/monsters/monster-000.png", name: "Shadrix", type: "shadow" },
-  { id: 1, src: "/monsters/monster-001-png.png", name: "Fairy", type: "fire" },
-  { id: 2, src: "/monsters/monster-002-png.png", name: "Crystalix", type: "ice" },
-  { id: 3, src: "/monsters/monster-003-png.png", name: "Guarana", type: "grass" },
-  { id: 4, src: "/monsters/monster-004-png.png", name: "Volterra", type: "electric" },
-  { id: 5, src: "/monsters/monster-005-png.png", name: "Aquarus", type: "water" },
-  { id: 6, src: "/monsters/monster-006-png.png", name: "Infernus", type: "fire" },
-  { id: 7, src: "/monsters/monster-007.png", name: "Lumenis", type: "grass" },
-  { id: 8, src: "/monsters/monster-008.png", name: "Spectra", type: "psychic" },
-];
+import { monsters, getTypeColor, formatBirthdate, getMonsterById } from "@/lib/monsters";
 
 
 interface LeaderboardEntry {
@@ -43,11 +33,10 @@ export default function Home() {
   const router = useRouter();
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [isLoadingLeaderboard, setIsLoadingLeaderboard] = useState(true);
-  const [canSyncXp, setCanSyncXp] = useState(false);
   const [leaderboardPeriod, setLeaderboardPeriod] = useState<'week' | 'all'>('week');
-  const [githubUsername, setGithubUsername] = useState('');
-  const [showUsernameInput, setShowUsernameInput] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState<number | null>(null);
+  const [showEventPopup, setShowEventPopup] = useState(false);
+  const [totalTrainers, setTotalTrainers] = useState<number>(0);
+  const eventPopupTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (session?.user?.email && status === 'authenticated') {
@@ -77,7 +66,9 @@ export default function Home() {
   useEffect(() => {
     const fetchLeaderboard = async () => {
       try {
-        const response = await fetch(`/api/leaderboard?period=${leaderboardPeriod}`);
+        const userId = (session?.user as Record<string, unknown>)?.id as string;
+        const userIdParam = userId ? `&userId=${userId}` : '';
+        const response = await fetch(`/api/leaderboard?period=${leaderboardPeriod}${userIdParam}`);
         const data = await response.json();
 
         if (data.success) {
@@ -91,61 +82,89 @@ export default function Home() {
     };
 
     fetchLeaderboard();
-  }, [leaderboardPeriod]);
+  }, [leaderboardPeriod, session]);
 
+  // Show event popup on page load (only once per session and if user is not already participating)
   useEffect(() => {
-    if (session?.user) {
-          setCanSyncXp((session.user as Record<string, unknown>)?.onboardingCompleted as boolean || false);
+    const EVENT_POPUP_KEY = 'hasSeenEventPopup';
+    const EVENT_ID = 'first-community-event';
+    const POPUP_DELAY_MS = 1000;
+
+    const hasSeenEventPopup = sessionStorage.getItem(EVENT_POPUP_KEY);
+    if (hasSeenEventPopup) return;
+
+    const markPopupAsSeen = () => {
+      sessionStorage.setItem(EVENT_POPUP_KEY, 'true');
+    };
+
+    const showPopupWithDelay = () => {
+      eventPopupTimerRef.current = setTimeout(() => {
+        setShowEventPopup(true);
+        markPopupAsSeen();
+      }, POPUP_DELAY_MS);
+    };
+
+    const isAuthenticated = session?.user?.email && status === 'authenticated';
+
+    if (isAuthenticated) {
+      const checkParticipation = async () => {
+        try {
+          const response = await fetch(`/api/check-event-participation?eventId=${EVENT_ID}`);
+          const data = await response.json();
+
+          if (data.success && !data.hasJoined) {
+            showPopupWithDelay();
+          } else {
+            markPopupAsSeen();
+          }
+        } catch (error) {
+          console.error('Error checking event participation:', error);
+          showPopupWithDelay();
+        }
+      };
+
+      checkParticipation();
+    } else {
+      showPopupWithDelay();
     }
-  }, [session]);
+
+    return () => {
+      if (eventPopupTimerRef.current) {
+        clearTimeout(eventPopupTimerRef.current);
+        eventPopupTimerRef.current = null;
+      }
+    };
+  }, [session, status]);
+
+  // Fetch total trainers count
+  useEffect(() => {
+    const fetchTotalTrainers = async () => {
+      try {
+        const response = await fetch('/api/total-trainers');
+        const data = await response.json();
+
+        if (data.success) {
+          setTotalTrainers(data.count);
+        }
+      } catch (error) {
+        console.error('Error fetching total trainers:', error);
+      }
+    };
+
+    fetchTotalTrainers();
+  }, []);
+
 
   const handleSignIn = () => {
     signIn("github");
   };
 
-  const handleSyncXp = async () => {
-    if (!canSyncXp) return;
-
-    try {
-      const response = await fetch('/api/sync-xp', { method: 'POST' });
-      const data = await response.json();
-
-      if (data.success) {
-        window.location.reload();
-      }
-    } catch (error) {
-      console.error('Failed to sync XP:', error);
-    }
-  };
 
   const selectedMonsterId = (session?.user as Record<string, unknown>)?.selectedMonsterId as number;
-  const selectedMonster = selectedMonsterId !== null && selectedMonsterId !== undefined ? monsters[selectedMonsterId] : null;
+  const selectedMonster = getMonsterById(selectedMonsterId);
 
   const gitmonSelectedAt = (session?.user as Record<string, unknown>)?.gitmonSelectedAt as Date;
 
-  const getTypeColor = (type: string) => {
-    const colors = {
-      fire: "bg-red-500",
-      water: "bg-blue-500",
-      grass: "bg-green-500",
-      electric: "bg-yellow-500",
-      ice: "bg-cyan-500",
-      psychic: "bg-purple-500",
-      shadow: "bg-gray-800",
-      light: "bg-yellow-300",
-    };
-    return colors[type as keyof typeof colors] || "bg-gray-500";
-  };
-
-  const formatBirthdate = (date: string | Date | null) => {
-    if (!date) return "Unknown";
-    const d = new Date(date);
-    return d.toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
 
   const currentUserInLeaderboard = leaderboard.find(user =>
     user.name === session?.user?.name ||
@@ -163,16 +182,21 @@ export default function Home() {
   return (
     <>
       <SponsorBar />
+      <EventPopup
+        isOpen={showEventPopup}
+        onClose={() => setShowEventPopup(false)}
+      />
       <main className="min-h-screen bg-background">
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-8 relative">
           <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-primary to-blue-600 bg-clip-text text-transparent" style={{ fontFamily: 'Minecraftia, monospace' }}>
             GitMon Leaderboard
           </h1>
           <p className="text-muted-foreground">
-            Compete with developers worldwide and level up your coding game
+            Compete with developers worldwide. Open-source GitHub leaderboard.
           </p>
+
         </div>
 
         {/* Main Layout */}
@@ -228,16 +252,36 @@ export default function Home() {
             ) : (
               <div className="bg-card rounded-xl p-6">
                 <div className="text-center mb-6">
-                  <h3 className="text-lg font-bold mb-3">Trainer Profile</h3>
+                  <div className="flex items-center justify-center gap-2 mb-3">
+                    <h3 className="text-lg font-bold">Trainer Profile</h3>
+                    <button
+                      onClick={() => router.push(`/${currentUserInLeaderboard?.githubUsername || session.user?.email?.split('@')[0]}`)}
+                      className="text-blue-500 hover:text-blue-700 hover:scale-110 transition-all duration-200 cursor-pointer"
+                      title="View full profile"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth={2}
+                        className="w-5 h-5"
+                      >
+                        <path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6" />
+                        <polyline points="15,3 21,3 21,9" />
+                        <line x1="10" y1="14" x2="21" y2="3" />
+                      </svg>
+                    </button>
+                  </div>
                   <div className="bg-muted/50 rounded-lg p-4 space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Name:</span>
                       <span className="font-medium">{session.user?.name}</span>
                     </div>
-                    <div className="flex justify-between">
+                    {/* <div className="flex justify-between">
                       <span className="text-muted-foreground">GitHub:</span>
                       <span className="font-medium">@{session.user?.email?.split('@')[0]}</span>
-                    </div>
+                    </div> */}
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">GitMon:</span>
                       <span className={selectedMonster ? "text-green-500 font-medium" : "text-yellow-500 font-medium"}>
@@ -404,10 +448,11 @@ export default function Home() {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => router.push('/docs')}
-                      className="rounded-full text-xs"
+                      onClick={() => router.push('/gitdex')}
+                      className="rounded-full text-xs shadow-green-500/30 hover:shadow-green-500/50 transition-shadow drop-shadow-none"
+                      style={{ boxShadow: '0 0 15px rgba(34, 197, 94, 0.3)' }}
                     >
-                      📋 How it Works
+                      📚 GITDEX
                     </Button>
                     <Button
                       variant="outline"
@@ -433,6 +478,14 @@ export default function Home() {
               </div>
 
               <div className="p-0 md:p-6">
+                {/* Total trainers count - only on desktop - always visible */}
+                <div className="hidden md:flex items-center gap-4 bg-muted/30">
+                  <div className="flex-1 text-right">
+                    <p className="text-xs text-muted-foreground">
+                      {totalTrainers.toLocaleString()} TRAINERS
+                    </p>
+                  </div>
+                </div>
                 {isLoadingLeaderboard ? (
                   <div className="text-center py-8">
                     <p className="text-muted-foreground">Loading leaderboard...</p>
@@ -442,13 +495,15 @@ export default function Home() {
                     <p className="text-muted-foreground">No players yet. Be the first to join!</p>
                   </div>
                 ) : (
-                  <div className="space-y-4">
+                  <div className="space-y-4 mt-4">
                     {leaderboard.map((user) => (
                     <div
                       key={user.rank}
                       className={`flex items-center gap-4 px-4 py-2 rounded-full transition-colors ${
                         user.rank <= 3
                           ? 'bg-gradient-to-r from-yellow-500/10 to-orange-500/10 border border-yellow-500/20'
+                          : 'isCurrentUser' in user && user.isCurrentUser
+                          ? 'bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20'
                           : 'bg-muted/50 hover:bg-muted'
                       }`}
                     >
@@ -459,23 +514,42 @@ export default function Home() {
                       <div className="flex-1">
                         {/* Desktop layout */}
                         <div className="hidden md:flex items-center gap-2">
-                          <h3 className="font-semibold">{user.name}</h3>
-                          <span className="text-sm text-muted-foreground">
+                          <a
+                            href={`https://github.com/${user.githubUsername || user.name}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold hover:text-primary transition-colors cursor-pointer hover:underline"
+                          >
+                            @{user.githubUsername || user.name}
+                          </a>
+                          <button
+                            onClick={() => router.push(`/gitdex?monster=${user.selectedMonsterId}`)}
+                            className="text-sm text-muted-foreground hover:text-primary transition-colors cursor-pointer hover:underline"
+                          >
                             {monsters[user.selectedMonsterId]?.name || 'Unknown'}
-                          </span>
+                          </button>
                           <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-medium">
-                            Level {user.level}
+                            <span className="hidden md:inline">Level {user.level}</span>
+                            <span className="md:hidden">Lv. {user.level}</span>
                           </span>
                         </div>
                         {/* Mobile layout - stacked */}
                         <div className="md:hidden space-y-1">
-                          <h3 className="font-semibold">{user.name}</h3>
+                          <a
+                            href={`https://github.com/${user.githubUsername || user.name}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="font-semibold hover:text-primary transition-colors cursor-pointer hover:underline block"
+                          >
+                            @{user.githubUsername || user.name}
+                          </a>
                           <div className="flex items-center gap-2">
                             <span className="text-sm text-muted-foreground">
                               {monsters[user.selectedMonsterId]?.name || 'Unknown'}
                             </span>
                             <span className="bg-red-500 text-white text-xs px-2 py-1 rounded-full font-medium">
-                              Level {user.level}
+                              <span className="hidden md:inline">Level {user.level}</span>
+                              <span className="md:hidden">Lv. {user.level}</span>
                             </span>
                           </div>
                         </div>

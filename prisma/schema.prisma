@@ -60,6 +60,8 @@ model User {
   // GitMon specific fields
   selectedMonsterId Int?
   gitmonSelectedAt  DateTime?
+  guildId           String? // Guild membership
+  isGitMonContributor Boolean @default(false) // Contributed to GitMon repository
   level             Int     @default(1)
   xp                Int     @default(0)
   onboardingCompleted Boolean @default(false)
@@ -81,6 +83,7 @@ model User {
   accounts Account[]
   sessions Session[]
   activities XpActivity[]
+  eventParticipations EventParticipant[]
 
   @@map("users")
 }
@@ -97,6 +100,19 @@ model XpActivity {
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("xp_activities")
+}
+
+model EventParticipant {
+  id             String   @id @default(cuid())
+  userId         String
+  eventId        String
+  githubUsername String?
+  joinedAt       DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, eventId])
+  @@map("event_participants")
 }
 
 model VerificationToken {

@@ -7,6 +7,7 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get('limit') || '50');
     const period = searchParams.get('period') || 'week';
+    const currentUserId = searchParams.get('userId');
 
     const orderBy = period === 'week'
       ? [{ weeklyXp: 'desc' as const }, { level: 'desc' as const }, { lastXpUpdate: 'desc' as const }]
@@ -56,6 +57,90 @@ export async function GET(request: Request) {
       },
       lastActive: user.lastXpUpdate
     }));
+
+    type LeaderboardEntry = typeof leaderboard[0] & { isCurrentUser?: boolean };
+
+    // Se o usuário atual não está no top 50, busca ele separadamente
+    if (currentUserId && !users.find(u => u.id === currentUserId)) {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: currentUserId },
+        select: {
+          id: true,
+          name: true,
+          githubUsername: true,
+          selectedMonsterId: true,
+          level: true,
+          xp: true,
+          dailyXp: true,
+          weeklyXp: true,
+          totalCommits: true,
+          totalPRs: true,
+          totalStars: true,
+          currentStreak: true,
+          lastXpUpdate: true,
+          onboardingCompleted: true
+        }
+      });
+
+      if (currentUser && currentUser.onboardingCompleted && currentUser.selectedMonsterId !== null) {
+        // Calcula a posição real do usuário
+        const userRank = await prisma.user.count({
+          where: {
+            onboardingCompleted: true,
+            selectedMonsterId: { not: null },
+            OR: period === 'week'
+              ? [
+                  { weeklyXp: { gt: currentUser.weeklyXp } },
+                  {
+                    weeklyXp: currentUser.weeklyXp,
+                    level: { gt: currentUser.level }
+                  },
+                  {
+                    weeklyXp: currentUser.weeklyXp,
+                    level: currentUser.level,
+                    lastXpUpdate: { gt: currentUser.lastXpUpdate }
+                  }
+                ]
+              : [
+                  { xp: { gt: currentUser.xp } },
+                  {
+                    xp: currentUser.xp,
+                    level: { gt: currentUser.level }
+                  },
+                  {
+                    xp: currentUser.xp,
+                    level: currentUser.level,
+                    lastXpUpdate: { gt: currentUser.lastXpUpdate }
+                  }
+                ]
+          }
+        }) + 1;
+
+        const currentUserEntry: LeaderboardEntry = {
+          rank: userRank,
+          id: currentUser.id,
+          name: currentUser.name || currentUser.githubUsername || 'Anonymous',
+          githubUsername: currentUser.githubUsername,
+          selectedMonsterId: currentUser.selectedMonsterId,
+          level: currentUser.level,
+          xp: period === 'week' ? currentUser.weeklyXp : currentUser.xp,
+          dailyXp: currentUser.dailyXp,
+          weeklyXp: currentUser.weeklyXp,
+          totalXp: currentUser.xp,
+          rank_title: getUserRank(currentUser.level),
+          stats: {
+            commits: period === 'week' ? Math.floor(currentUser.weeklyXp / 5) : currentUser.totalCommits,
+            prs: period === 'week' ? Math.floor(currentUser.weeklyXp / 40) : currentUser.totalPRs,
+            stars: currentUser.totalStars,
+            streak: currentUser.currentStreak
+          },
+          lastActive: currentUser.lastXpUpdate,
+          isCurrentUser: true
+        };
+
+        (leaderboard as LeaderboardEntry[]).push(currentUserEntry);
+      }
+    }
 
     return NextResponse.json({
       success: true,

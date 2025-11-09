@@ -25,7 +25,9 @@
       "Bash(npx next build:*)",
       "Bash(find:*)",
       "Bash(npx:*)",
-      "Bash(yes)"
+      "Bash(yes)",
+      "mcp__ide__getDiagnostics",
+      "Bash(pkill:*)"
     ],
     "deny": [],
     "ask": []
