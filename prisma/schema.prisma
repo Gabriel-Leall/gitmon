@@ -86,6 +86,8 @@ model User {
   activities XpActivity[]
   eventParticipations EventParticipant[]
 
+  @@index([weeklyXp, onboardingCompleted])
+  @@index([githubUsername])
   @@map("users")
 }
 
