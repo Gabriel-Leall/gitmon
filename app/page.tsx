@@ -1,10 +1,9 @@
-"use client";
-
 import Navbar from "@/components/Navbar";
 import HeroSection from "@/components/landing/HeroSection";
 import LeaderboardSection from "@/components/landing/LeaderboardSection";
 
 export default function Home() {
+  const seed = Math.floor(Math.random() * 1_000_000_000);
   return (
     <div className="min-h-screen" style={{ backgroundColor: "#1A1A2E" }}>
       <Navbar />
@@ -12,7 +11,7 @@ export default function Home() {
       {/* Main Container */}
       <div className="container mx-auto px-4 lg:px-8 min-h-[calc(100vh-64px)] flex items-center">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-16 w-full py-12 lg:py-0">
-          <HeroSection />
+          <HeroSection seed={seed} />
           <LeaderboardSection />
         </div>
       </div>

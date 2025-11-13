@@ -3,8 +3,7 @@
 import { Button } from "@/components/ui/button";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
-import Image from "next/image";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 interface FloatingIcon {
   id: number;
@@ -21,11 +20,21 @@ interface XPText {
   y: number;
 }
 
-export default function HeroSection() {
+// PRNG determinístico (mulberry32)
+function mulberry32(a: number) {
+  return function () {
+    let t = (a += 0x6d2b79f5);
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+export default function HeroSection({ seed }: { seed: number }) {
   const router = useRouter();
-  const [floatingIcons, setFloatingIcons] = useState<FloatingIcon[]>([]);
   const [xpTexts, setXpTexts] = useState<XPText[]>([]);
-  const [randomMonster] = useState(() => {
+  const { randomMonster, floatingIcons } = useMemo(() => {
+    const rand = mulberry32(seed);
     const monsters = [
       "monster-000.png",
       "monster-001-png.png",
@@ -37,34 +46,35 @@ export default function HeroSection() {
       "monster-007.png",
       "monster-008.png",
     ];
-    return monsters[Math.floor(Math.random() * monsters.length)];
-  });
-
-  useEffect(() => {
-    const icons: FloatingIcon[] = [];
+    const selected = monsters[Math.floor(rand() * monsters.length)];
     const types: Array<"commit" | "pr" | "issue"> = ["commit", "pr", "issue"];
-
+    const icons: FloatingIcon[] = [];
     for (let i = 0; i < 8; i++) {
       icons.push({
         id: i,
-        type: types[Math.floor(Math.random() * types.length)],
-        x: Math.random() * 100,
-        y: Math.random() * 100,
-        delay: Math.random() * 2,
+        type: types[Math.floor(rand() * types.length)],
+        x: rand() * 100,
+        y: rand() * 100,
+        delay: rand() * 2,
       });
     }
+    return { randomMonster: selected, floatingIcons: icons };
+  }, [seed]);
 
-    setFloatingIcons(icons);
-
-    // Generate XP texts periodically
+  useEffect(() => {
+    // Generate XP texts periodically (client-only, sem impacto na hidratação)
     const xpInterval = setInterval(() => {
-      const xpValues = ["+10", "+25", "+50", "+100", "+200"];
-      const side = Math.random() > 0.5 ? 1 : -1; // Left or right side
+      const xpValues = ["+5","+10", "+25", "+50", "+100"];
+      // Preferencialmente à esquerda do monstro, com pequena variação
+      const baseX = 35; // em % do contêiner
+      const jitterX = Math.random() * 6 - 3; // -3% a 3%
+      const baseY = 50; // centro vertical aproximado
+      const jitterY = Math.random() * 10 - 5; // -5% a 5%
       const newXP: XPText = {
         id: Date.now(),
         value: xpValues[Math.floor(Math.random() * xpValues.length)],
-        x: 50 + side * (25 + Math.random() * 10), // 25-35% away from center, left or right
-        y: 40 + Math.random() * 20, // Vertical variation
+        x: baseX + jitterX,
+        y: baseY + jitterY,
       };
 
       setXpTexts((prev) => [...prev, newXP]);
@@ -208,10 +218,12 @@ export default function HeroSection() {
         {floatingIcons.map((icon) => (
           <div
             key={icon.id}
-            className="absolute animate-float-to-center"
+            className="absolute pointer-events-none animate-float-to-center"
             style={{
-              left: `${icon.x}%`,
-              top: `${icon.y}%`,
+              ["--start-left" as any]: `${icon.x}%`,
+              ["--start-top" as any]: `${icon.y}%`,
+              left: "var(--start-left)",
+              top: "var(--start-top)",
               animationDelay: `${icon.delay}s`,
             }}
           >
@@ -250,6 +262,8 @@ export default function HeroSection() {
       <style jsx>{`
         @keyframes floatToCenter {
           0% {
+            left: var(--start-left);
+            top: var(--start-top);
             transform: translate(0, 0) scale(1);
             opacity: 0;
           }
@@ -257,8 +271,9 @@ export default function HeroSection() {
             opacity: 1;
           }
           100% {
-            transform: translate(calc(50vw / 2 - 50%), calc(40vh / 2 - 50%))
-              scale(0.3);
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%) scale(0.3);
             opacity: 0;
           }
         }
