@@ -17,9 +17,9 @@
 ### 1. **🏠 Landing Page Atrativa**
 **Objetivo:** Vender a ideia antes do login
 - [ ] Substituir home padrão do Next.js
-- [ ] Hero section explicando o conceito
-- [ ] Preview do dashboard/leaderboard
-- [ ] CTA para "Começar agora"
+- [x] Hero section explicando o conceito
+- [x] Preview do dashboard/leaderboard
+- [x] CTA para "Começar agora"
 - [ ] Seção de features principais
 - [ ] Footer com links sociais
 
