@@ -56,7 +56,7 @@ export default function OnboardingPage() {
         });
 
         if (response.ok) {
-          window.location.href = "/";
+          window.location.href = "/leaderboard";
         } else {
           console.error("Failed to save monster selection");
         }

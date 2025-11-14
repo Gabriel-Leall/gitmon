@@ -89,7 +89,7 @@ export default function HeroSection({ seed }: { seed: number }) {
   }, []);
 
   const handleSignIn = () => {
-    signIn("github");
+    signIn("github", { callbackUrl: "/onboarding" });
   };
 
   const getIconContent = (type: string) => {
@@ -120,10 +120,11 @@ export default function HeroSection({ seed }: { seed: number }) {
 
       <p
         className="font-geist text-lg lg:text-xl mb-8 leading-relaxed"
-        style={{ color: "#BDC2BF" }}
+        style={{ color: "#BDC2BF/90" }}
       >
-        Join the community of developers who turn code into adventure. Earn XP
-        for every commit, pull request, and GitHub contribution.
+        Your GitHub stats are now your high score. Connect your account to
+        choose your partner Gitmon, feed it with code, and climb the
+        leaderboard.
       </p>
 
       {/* Monster Animation Section (moved above CTA) */}

@@ -8,7 +8,7 @@ export default function Navbar() {
   const router = useRouter();
 
   const handleSignIn = () => {
-    signIn("github");
+    signIn("github", { callbackUrl: "/onboarding" });
   };
 
   return (
